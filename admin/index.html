@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homepage Image Manager | Taiwan Sooner</title>
+<link rel="icon" href="/images/logo/sooner-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body data-page="admin">
+
+<div id="site-header"></div>
+
+<div class="admin-wrap">
+  <div class="admin-tabs">
+    <a href="/admin/index.html" class="is-active">Homepage Photos</a>
+    <a href="/admin/products.html">Products</a>
+  </div>
+
+  <h1>Homepage Image Manager</h1>
+  <p class="muted">Add or remove the photos that rotate on the homepage banner. Changes are saved straight to the website's GitHub repository — the live site updates within a minute or two of publishing.</p>
+
+  <div class="panel" id="setup-panel">
+    <h3>1. Connect once</h3>
+    <p class="muted">Paste your GitHub access token below (see the setup guide for how to create one — it only needs access to this one repository). It is stored only in this browser, never uploaded anywhere except directly to GitHub.</p>
+    <input type="password" id="token-input" placeholder="github_pat_xxxxxxxxxxxx" style="margin-bottom:10px">
+    <button class="btn small-btn" id="save-token">Save token</button>
+    <button class="btn btn-outline small-btn" id="clear-token">Forget token</button>
+    <div class="status" id="setup-status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>2. Add a new photo</h3>
+    <label for="file-input">Image file</label>
+    <input type="file" id="file-input" accept="image/*" style="margin-bottom:10px">
+    <label for="alt-input">Short description (for accessibility, not shown on screen)</label>
+    <input type="text" id="alt-input" placeholder="e.g. TSL-510 educational headset lineup" style="margin-bottom:10px">
+    <label for="order-input">Position (lower numbers show first)</label>
+    <input type="number" id="order-input" class="num-input" value="1" style="margin-bottom:14px">
+    <br>
+    <button class="btn" id="upload-btn">Publish to homepage</button>
+    <div class="status" id="upload-status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>3. Current homepage photos</h3>
+    <div id="slide-list" class="muted">Connect with your token above to load the current photos.</div>
+  </div>
+</div>
+
+<div id="site-footer"></div>
+<script src="/js/main.js"></script>
+<script src="/js/admin-common.js"></script>
+<script>
+const DATA_PATH = "data/carousel.json";
+const IMAGE_DIR = "images/carousel";
+
+const tokenInput = document.getElementById("token-input");
+const setupStatus = document.getElementById("setup-status");
+const uploadStatus = document.getElementById("upload-status");
+const slideList = document.getElementById("slide-list");
+
+document.getElementById("save-token").addEventListener("click", () => {
+  if (!tokenInput.value.trim()) return;
+  tsSetToken(tokenInput.value.trim());
+  tokenInput.value = "";
+  setupStatus.textContent = "Token saved in this browser.";
+  setupStatus.className = "status ok";
+  refresh();
+});
+document.getElementById("clear-token").addEventListener("click", () => {
+  tsClearToken();
+  setupStatus.textContent = "Token removed.";
+  setupStatus.className = "status";
+  refresh();
+});
+
+async function refresh() {
+  if (!tsGetToken()) {
+    slideList.textContent = "Connect with your token above to load the current photos.";
+    return;
+  }
+  slideList.textContent = "Loading…";
+  try {
+    const { entries } = await tsLoadJson(DATA_PATH);
+    if (entries.length === 0) {
+      slideList.textContent = "No photos yet — add one above.";
+      return;
+    }
+    slideList.innerHTML = "";
+    entries
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .forEach((entry) => {
+        const row = document.createElement("div");
+        row.className = "row-item";
+        row.innerHTML = `
+          <img src="/${entry.src}" alt="">
+          <div class="grow">
+            <div>${entry.alt || "(no description)"}</div>
+            <div class="fname">${entry.src} — position ${entry.order ?? "?"}</div>
+          </div>
+          <div class="row-actions">
+            <label class="muted" style="margin:0"><input type="checkbox" ${entry.active !== false ? "checked" : ""} data-action="toggle" data-id="${entry.id}"> shown</label>
+            <button class="btn btn-outline small-btn" data-action="delete" data-id="${entry.id}">Remove</button>
+          </div>`;
+        slideList.appendChild(row);
+      });
+
+    slideList.querySelectorAll('[data-action="toggle"]').forEach((cb) => {
+      cb.addEventListener("change", () => toggleActive(cb.dataset.id, cb.checked));
+    });
+    slideList.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener("click", () => removeSlide(btn.dataset.id));
+    });
+  } catch (e) {
+    slideList.textContent = "Could not load photos: " + e.message;
+  }
+}
+
+async function toggleActive(id, active) {
+  const { entries, sha } = await tsLoadJson(DATA_PATH);
+  const updated = entries.map((e) => (e.id === id ? { ...e, active } : e));
+  await tsSaveJson(DATA_PATH, updated, sha, `Toggle carousel image ${id}`);
+  refresh();
+}
+
+async function removeSlide(id) {
+  if (!confirm("Remove this photo from the homepage?")) return;
+  const { entries, sha } = await tsLoadJson(DATA_PATH);
+  const target = entries.find((e) => e.id === id);
+  const remaining = entries.filter((e) => e.id !== id);
+  await tsSaveJson(DATA_PATH, remaining, sha, `Remove carousel image ${id}`);
+  if (target) {
+    try {
+      const fileInfo = await tsGhGet(target.src);
+      await tsGhDelete(target.src, fileInfo.sha, `Delete image file for ${id}`);
+    } catch (e) {
+      console.warn("Image file cleanup skipped:", e.message);
+    }
+  }
+  refresh();
+}
+
+document.getElementById("upload-btn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("file-input");
+  const alt = document.getElementById("alt-input").value.trim();
+  const order = parseInt(document.getElementById("order-input").value, 10) || 1;
+  const file = fileInput.files[0];
+  uploadStatus.className = "status";
+
+  if (!tsGetToken()) { uploadStatus.textContent = "Connect your token first."; uploadStatus.className = "status error"; return; }
+  if (!file) { uploadStatus.textContent = "Choose an image file first."; uploadStatus.className = "status error"; return; }
+
+  uploadStatus.textContent = "Uploading…";
+  try {
+    const dataUrl = await tsReadFileAsDataUrl(file);
+    const id = Date.now().toString(36);
+    const ext = file.name.split(".").pop().toLowerCase();
+    const safeExt = /^(jpe?g|png|webp)$/.test(ext) ? ext : "jpg";
+    const path = `${IMAGE_DIR}/${id}.${safeExt}`;
+
+    await tsGhPut(path, tsB64FromDataUrl(dataUrl), null, `Add carousel image ${id}`);
+
+    const { entries, sha } = await tsLoadJson(DATA_PATH);
+    entries.push({ id, src: path, alt, order, active: true });
+    await tsSaveJson(DATA_PATH, entries, sha, `Register carousel image ${id}`);
+
+    uploadStatus.textContent = "Published! It will appear on the homepage shortly.";
+    uploadStatus.className = "status ok";
+    fileInput.value = "";
+    document.getElementById("alt-input").value = "";
+    refresh();
+  } catch (e) {
+    uploadStatus.textContent = "Something went wrong: " + e.message;
+    uploadStatus.className = "status error";
+  }
+});
+
+document.addEventListener("partials:loaded", refresh);
+</script>
+</body>
+</html>
