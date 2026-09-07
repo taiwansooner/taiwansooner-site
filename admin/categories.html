@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Category Manager | Taiwan Sooner</title>
+<link rel="icon" href="/images/logo/sooner-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body data-page="admin">
+
+<div id="site-header"></div>
+
+<div class="admin-wrap">
+  <div class="admin-tabs">
+    <a href="/admin/index.html">Homepage Photos</a>
+    <a href="/admin/products.html">Products</a>
+    <a href="/admin/categories.html" class="is-active">Categories</a>
+  </div>
+
+  <h1>Category Manager</h1>
+  <p class="muted">These are the categories shown in the sidebar filter on the Products page. Renaming a category here does not automatically relabel products already using the old name — edit those products individually if you rename one that's in use.</p>
+
+  <div class="panel" id="setup-panel">
+    <h3>1. Connect once</h3>
+    <p class="muted">Paste your GitHub access token below. It's stored only in this browser.</p>
+    <input type="password" id="token-input" placeholder="github_pat_xxxxxxxxxxxx" style="margin-bottom:10px">
+    <button class="btn small-btn" id="save-token">Save token</button>
+    <button class="btn btn-outline small-btn" id="clear-token">Forget token</button>
+    <div class="status" id="setup-status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>2. Add a category</h3>
+    <input type="text" id="new-category-input" placeholder="e.g. Gaming Headset" style="margin-bottom:10px">
+    <button class="btn" id="add-btn">Add category</button>
+    <div class="status" id="add-status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>3. Current categories</h3>
+    <div id="category-list" class="muted">Connect with your token above to load the current categories.</div>
+  </div>
+</div>
+
+<div id="site-footer"></div>
+<script src="/js/main.js"></script>
+<script src="/js/admin-common.js"></script>
+<script>
+const CATEGORIES_PATH = "data/categories.json";
+
+const tokenInput = document.getElementById("token-input");
+const setupStatus = document.getElementById("setup-status");
+const addStatus = document.getElementById("add-status");
+const categoryList = document.getElementById("category-list");
+const newCategoryInput = document.getElementById("new-category-input");
+
+document.getElementById("save-token").addEventListener("click", () => {
+  if (!tokenInput.value.trim()) return;
+  tsSetToken(tokenInput.value.trim());
+  tokenInput.value = "";
+  setupStatus.textContent = "Token saved in this browser.";
+  setupStatus.className = "status ok";
+  refresh();
+});
+document.getElementById("clear-token").addEventListener("click", () => {
+  tsClearToken();
+  setupStatus.textContent = "Token removed.";
+  setupStatus.className = "status";
+  refresh();
+});
+
+async function refresh() {
+  if (!tsGetToken()) {
+    categoryList.textContent = "Connect with your token above to load the current categories.";
+    return;
+  }
+  categoryList.textContent = "Loading…";
+  try {
+    const { entries } = await tsLoadJson(CATEGORIES_PATH);
+    if (entries.length === 0) {
+      categoryList.textContent = "No categories yet — add one above.";
+      return;
+    }
+    categoryList.innerHTML = "";
+    entries.forEach((cat, index) => {
+      const row = document.createElement("div");
+      row.className = "row-item";
+      row.innerHTML = `
+        <div class="grow">
+          <input type="text" value="${cat.replace(/"/g, '&quot;')}" data-index="${index}" class="cat-rename-input" style="margin-bottom:0">
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-outline small-btn" data-action="rename" data-index="${index}">Save</button>
+          <button class="btn btn-outline small-btn" data-action="delete" data-index="${index}">Remove</button>
+        </div>`;
+      categoryList.appendChild(row);
+    });
+
+    categoryList.querySelectorAll('[data-action="rename"]').forEach((btn) => {
+      btn.addEventListener("click", () => renameCategory(parseInt(btn.dataset.index, 10)));
+    });
+    categoryList.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener("click", () => deleteCategory(parseInt(btn.dataset.index, 10)));
+    });
+  } catch (e) {
+    categoryList.textContent = "Could not load categories: " + e.message;
+  }
+}
+
+document.getElementById("add-btn").addEventListener("click", async () => {
+  const value = newCategoryInput.value.trim();
+  addStatus.className = "status";
+  if (!tsGetToken()) { addStatus.textContent = "Connect your token first."; addStatus.className = "status error"; return; }
+  if (!value) { addStatus.textContent = "Enter a category name first."; addStatus.className = "status error"; return; }
+  try {
+    const { entries, sha } = await tsLoadJson(CATEGORIES_PATH);
+    if (entries.includes(value)) {
+      addStatus.textContent = "That category already exists.";
+      addStatus.className = "status error";
+      return;
+    }
+    entries.push(value);
+    await tsSaveJson(CATEGORIES_PATH, entries, sha, `Add category ${value}`);
+    addStatus.textContent = "Category added!";
+    addStatus.className = "status ok";
+    newCategoryInput.value = "";
+    refresh();
+  } catch (e) {
+    addStatus.textContent = "Something went wrong: " + e.message;
+    addStatus.className = "status error";
+  }
+});
+
+async function renameCategory(index) {
+  const input = categoryList.querySelector(`.cat-rename-input[data-index="${index}"]`);
+  const newValue = input.value.trim();
+  if (!newValue) return;
+  const { entries, sha } = await tsLoadJson(CATEGORIES_PATH);
+  entries[index] = newValue;
+  await tsSaveJson(CATEGORIES_PATH, entries, sha, `Rename category to ${newValue}`);
+  refresh();
+}
+
+async function deleteCategory(index) {
+  if (!confirm("Remove this category from the filter sidebar?")) return;
+  const { entries, sha } = await tsLoadJson(CATEGORIES_PATH);
+  entries.splice(index, 1);
+  await tsSaveJson(CATEGORIES_PATH, entries, sha, "Remove category");
+  refresh();
+}
+
+document.addEventListener("partials:loaded", refresh);
+</script>
+</body>
+</html>

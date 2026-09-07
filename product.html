@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title id="page-title">Product | Taiwan Sooner Industries Co.</title>
+<link rel="icon" href="/images/logo/sooner-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="products">
+
+<div id="site-header"></div>
+
+<section class="section-tight">
+  <div class="wrap">
+    <a class="back-link" href="/products.html">&larr; Back to all products</a>
+    <div id="detail-root">
+      <p class="muted">Loading…</p>
+    </div>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="/js/main.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const id = params.get("id");
+const root = document.getElementById("detail-root");
+
+function paragraphs(text) {
+  return text
+    .split(/\n{2,}/)
+    .map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+fetch("/data/products.json")
+  .then(r => r.json())
+  .then(products => {
+    const p = products.find(item => item.id === id);
+    if (!p) {
+      root.innerHTML = `<p>We couldn't find that product. <a href="/products.html" style="color:var(--blue-200)">Browse all products</a>.</p>`;
+      return;
+    }
+    document.getElementById("page-title").textContent = p.name + " | Taiwan Sooner Industries Co.";
+    const photo = p.image
+      ? `<img src="/${p.image}" alt="${p.name}">`
+      : `Photo pending`;
+    const details = p.details
+      ? paragraphs(p.details)
+      : (p.description ? `<p>${p.description}</p>` : `<p class="muted">Full specifications coming soon — contact us for details.</p>`);
+
+    root.innerHTML = `
+      <div class="detail-layout">
+        <div class="detail-photo">${photo}</div>
+        <div class="detail-body">
+          <div class="cat">${p.category || ""}</div>
+          <h1>${p.name}</h1>
+          <div class="details">${details}</div>
+          <a class="btn" href="mailto:contact@taiwansooner.com?subject=Inquiry about ${encodeURIComponent(p.name)}">Ask about this product</a>
+        </div>
+      </div>`;
+  })
+  .catch(() => {
+    root.innerHTML = `<p>Something went wrong loading this product.</p>`;
+  });
+</script>
+</body>
+</html>

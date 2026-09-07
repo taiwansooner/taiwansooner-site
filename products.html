@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Products | Taiwan Sooner Industries Co.</title>
+<meta name="description" content="Browse Taiwan Sooner Industries' full range of educational, gaming and consumer headsets, earbuds, speakers and microphones.">
+<link rel="icon" href="/images/logo/sooner-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body data-page="products">
+
+<div id="site-header"></div>
+
+<section class="section-tight">
+  <div class="wrap">
+    <div class="section-head">
+      <h1>Products</h1>
+      <p>Taiwan Sooner Industries Co. provides a wide range of high-quality audio products. If you would like to inquire about products more tailored to your needs, please feel free to contact us for further assistance from our engineers.</p>
+      <a class="btn" href="mailto:contact@taiwansooner.com?subject=Inquiry%20from%20(your%20name/company%20name)">Contact us</a>
+    </div>
+
+    <div class="catalog-layout">
+      <aside class="category-nav">
+        <h3>Categories</h3>
+        <ul id="category-list"></ul>
+      </aside>
+
+      <div>
+        <div class="grid-4" id="product-grid"></div>
+        <p class="catalog-empty" id="catalog-empty" style="display:none">No products in this category yet.</p>
+        <div class="load-more-wrap">
+          <button class="btn btn-outline" id="load-more-btn">Load more</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="/js/main.js"></script>
+<script>
+const PAGE_SIZE = 8;
+let allProducts = [];
+let activeCategory = "All";
+let visibleCount = PAGE_SIZE;
+
+function render() {
+  const grid = document.getElementById("product-grid");
+  const empty = document.getElementById("catalog-empty");
+  const loadMoreBtn = document.getElementById("load-more-btn");
+
+  const filtered = allProducts.filter(
+    p => p.active !== false && (activeCategory === "All" || p.category === activeCategory)
+  );
+
+  grid.innerHTML = "";
+  if (filtered.length === 0) {
+    empty.style.display = "block";
+  } else {
+    empty.style.display = "none";
+    filtered.slice(0, visibleCount).forEach(p => {
+      const a = document.createElement("a");
+      a.className = "product-card";
+      a.href = "/product.html?id=" + encodeURIComponent(p.id);
+      const thumb = p.image
+        ? `<div class="thumb" style="background-image:url('/${p.image}');background-size:cover;background-position:center"></div>`
+        : `<div class="thumb">Photo pending</div>`;
+      a.innerHTML = `
+        ${thumb}
+        <div class="meta">
+          <div class="cat">${p.category || ""}</div>
+          <h3>${p.name}</h3>
+        </div>`;
+      grid.appendChild(a);
+    });
+  }
+
+  loadMoreBtn.style.display = filtered.length > visibleCount ? "inline-block" : "none";
+}
+
+function renderCategories(categories) {
+  const list = document.getElementById("category-list");
+  list.innerHTML = "";
+  ["All", ...categories].forEach(cat => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.textContent = cat;
+    if (cat === activeCategory) btn.classList.add("is-active");
+    btn.addEventListener("click", () => {
+      activeCategory = cat;
+      visibleCount = PAGE_SIZE;
+      list.querySelectorAll("button").forEach(b => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      render();
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+document.getElementById("load-more-btn").addEventListener("click", () => {
+  visibleCount += PAGE_SIZE;
+  render();
+});
+
+Promise.all([
+  fetch("/data/products.json").then(r => r.json()),
+  fetch("/data/categories.json").then(r => r.json())
+]).then(([products, categories]) => {
+  allProducts = products;
+  renderCategories(categories);
+  render();
+});
+</script>
+</body>
+</html>
