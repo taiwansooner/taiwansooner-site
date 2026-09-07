@@ -4,8 +4,8 @@
    and /admin/products.html (product catalog) load this file.
    ========================================================================= */
 window.TS_ADMIN_CONFIG = {
-  OWNER: "YOUR-GITHUB-USERNAME-OR-ORG",
-  REPO: "YOUR-REPO-NAME",
+  OWNER: "taiwansooner",
+  REPO: "taiwansooner.github.io",
   BRANCH: "main"
 };
 /* ========================================================================= */
