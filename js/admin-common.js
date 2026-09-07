@@ -4,7 +4,7 @@
    and /admin/products.html (product catalog) load this file.
    ========================================================================= */
 window.TS_ADMIN_CONFIG = {
-  OWNER: "taiwansooner",
+  OWNER: "taiwansooner-Owen",
   REPO: "taiwansooner.github.io",
   BRANCH: "main"
 };
